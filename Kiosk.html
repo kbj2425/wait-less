@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wait-Less — 현황판</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --border: #2a2a2a;
+    --accent: #00e5a0;
+    --text: #f0f0f0;
+    --text2: #666;
+    --warn: #ffaa44;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.2; pointer-events: none; z-index: 0;
+  }
+
+  .wrap {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 1000px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 40px;
+  }
+
+  /* 헤더 */
+  .kiosk-header {
+    display: flex; align-items: center; gap: 20px;
+    width: 100%;
+  }
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px; font-weight: 700; color: var(--accent);
+  }
+  .logo span { color: var(--text2); }
+  .live-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    animation: livePulse 1.5s infinite;
+  }
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,229,160,.5); }
+    50% { opacity: .6; box-shadow: 0 0 0 8px rgba(0,229,160,0); }
+  }
+  .live-label {
+    font-size: 13px; color: var(--accent);
+    font-family: 'Space Mono', monospace;
+  }
+  .clock {
+    margin-left: auto;
+    font-family: 'Space Mono', monospace;
+    font-size: 22px; color: var(--text2);
+  }
+
+  /* 일시정지 배너 */
+  #pausedBanner {
+    display: none;
+    width: 100%;
+    background: #2a1800; border: 1px solid #7a4500;
+    border-radius: 16px; padding: 20px;
+    text-align: center; font-size: 24px; color: var(--warn);
+  }
+
+  /* 메인 그리드 */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px; width: 100%;
+  }
+
+  /* 현재 호출 카드 */
+  .call-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px; padding: 40px;
+    text-align: center;
+    transition: border-color .4s;
+  }
+  .call-card.has-call {
+    border-color: var(--accent);
+    box-shadow: 0 0 40px rgba(0,229,160,.15);
+  }
+  .call-label {
+    font-size: 16px; color: var(--text2);
+    margin-bottom: 16px; letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .call-number {
+    font-family: 'Space Mono', monospace;
+    font-size: 120px; font-weight: 700;
+    line-height: 1; color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .call-number.empty { color: var(--text2); font-size: 80px; }
+  .call-name {
+    font-size: 22px; color: var(--text);
+    margin-bottom: 6px;
+  }
+  .call-purpose {
+    font-size: 16px; color: var(--text2);
+  }
+
+  /* 대기 정보 카드 */
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px; padding: 32px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .info-row {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .info-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .info-row-label {
+    font-size: 16px; color: var(--text2);
+  }
+  .info-row-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 40px; font-weight: 700; color: var(--text);
+  }
+  .info-row-unit {
+    font-size: 16px; color: var(--text2); margin-left: 4px;
+  }
+
+  /* 공지 */
+  .notice-section { width: 100%; }
+  .notice-item {
+    display: flex; align-items: center; gap: 12px;
+    background: #1f1500; border: 1px solid #5a3d00;
+    border-radius: 12px; padding: 14px 20px;
+    font-size: 18px; color: var(--warn);
+    margin-bottom: 10px;
+  }
+  .notice-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--warn); flex-shrink: 0;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .3; }
+  }
+
+  /* 최근 대기 번호 목록 */
+  .queue-preview {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px; padding: 24px 28px;
+  }
+  .queue-preview-title {
+    font-size: 14px; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 16px;
+  }
+  .queue-chips {
+    display: flex; flex-wrap: wrap; gap: 10px;
+  }
+  .queue-chip {
+    padding: 8px 16px;
+    background: #1a1a1a; border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 16px; color: var(--text2);
+  }
+  .queue-chip.called {
+    border-color: var(--accent); color: var(--accent);
+    background: #001a10;
+  }
+
+  /* 하단 */
+  .footer {
+    font-size: 13px; color: var(--text2);
+    font-family: 'Space Mono', monospace;
+    text-align: center;
+  }
+  .footer span { color: var(--text2); }
+
+  /* 일시정지 오버레이 */
+  #pauseOverlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,.7);
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+  }
+  #pauseOverlay.show { display: flex; }
+  .pause-icon { font-size: 80px; }
+  .pause-text { font-size: 32px; color: var(--warn); font-weight: 700; }
+  .pause-sub  { font-size: 16px; color: var(--text2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kiosk-header">
+    <div class="logo">Wait<span>-</span>Less</div>
+    <div class="live-dot"></div>
+    <div class="live-label">LIVE</div>
+    <div class="clock" id="clock">00:00:00</div>
+  </div>
+
+  <!-- 공지 -->
+  <div class="notice-section" id="noticeSection" style="display:none;"></div>
+
+  <!-- 메인 그리드 -->
+  <div class="main-grid">
+    <!-- 현재 호출 -->
+    <div class="call-card" id="callCard">
+      <div class="call-label">🔔 현재 호출</div>
+      <div class="call-number empty" id="callNumber">—</div>
+      <div class="call-name" id="callName" style="display:none;"></div>
+      <div class="call-purpose" id="callPurpose" style="display:none;"></div>
+    </div>
+
+    <!-- 대기 정보 -->
+    <div class="info-card">
+      <div class="info-row">
+        <div class="info-row-label">현재 대기 팀</div>
+        <div>
+          <span class="info-row-val" id="infoWaiting">—</span>
+          <span class="info-row-unit">팀</span>
+        </div>
+      </div>
+      <div class="info-row">
+        <div class="info-row-label">예상 최대 대기</div>
+        <div>
+          <span class="info-row-val" id="infoEst">—</span>
+          <span class="info-row-unit">분</span>
+        </div>
+      </div>
+      <div class="info-row">
+        <div class="info-row-label">오늘 총 방문</div>
+        <div>
+          <span class="info-row-val" id="infoTotal">—</span>
+          <span class="info-row-unit">팀</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 대기 번호 미리보기 -->
+  <div class="queue-preview">
+    <div class="queue-preview-title">대기 현황</div>
+    <div class="queue-chips" id="queueChips">
+      <span style="color:var(--text2);font-size:14px;">대기자 없음</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span id="lastUpdate">—</span> 기준 · 30초마다 자동 갱신
+  </div>
+</div>
+
+<!-- 일시정지 오버레이 -->
+<div id="pauseOverlay">
+  <div class="pause-icon">⏸</div>
+  <div class="pause-text">잠시 운영을 멈췄습니다</div>
+  <div class="pause-sub">곧 재개됩니다. 잠시 기다려주세요.</div>
+</div>
+
+<script>
+const API = "https://script.google.com/macros/s/AKfycbyd6vEm8tZfb5M5qBA6nj3SmIWl-MN9RavziBMO9KHNf-PzzDlWSK738O8wI3IzLCtc/exec";
+
+// 시계
+setInterval(() => {
+  const now = new Date();
+  document.getElementById("clock").textContent =
+    now.toLocaleTimeString("ko-KR", { hour12: false });
+}, 1000);
+
+// 데이터 로드
+async function loadData() {
+  try {
+    const [qRes, sRes, nRes, settRes] = await Promise.all([
+      fetch(`${API}?action=getQueue`),
+      fetch(`${API}?action=getStats`),
+      fetch(`${API}?action=getNotices`),
+      fetch(`${API}?action=getSettings`),
+    ]);
+    const queue    = (await qRes.json()).queue    || [];
+    const stats    = await sRes.json();
+    const notices  = (await nRes.json()).notices  || [];
+    const settings = await settRes.json();
+
+    renderAll(queue, stats, notices, settings);
+
+    const now = new Date();
+    document.getElementById("lastUpdate").textContent =
+      now.toLocaleTimeString("ko-KR", { hour12: false });
+  } catch {}
+}
+
+function renderAll(queue, stats, notices, settings) {
+  // 일시정지
+  const overlay = document.getElementById("pauseOverlay");
+  if (settings.paused) overlay.classList.add("show");
+  else overlay.classList.remove("show");
+
+  // 현재 호출 중인 팀
+  const calledList = queue.filter(q => q.status === "called");
+  const callCard   = document.getElementById("callCard");
+  const callNumber = document.getElementById("callNumber");
+  const callName   = document.getElementById("callName");
+  const callPurpose = document.getElementById("callPurpose");
+
+  if (calledList.length > 0) {
+    const c = calledList[calledList.length - 1];
+    callCard.classList.add("has-call");
+    callNumber.className = "call-number";
+    callNumber.textContent = "#" + c.number;
+    callName.style.display = "block";
+    callName.textContent = c.name + (c.type === "teacher" ? " 선생님" : "님");
+    callPurpose.style.display = "block";
+    callPurpose.textContent = c.purpose + " · " + (1 + (c.members?.length || 0)) + "명";
+  } else {
+    callCard.classList.remove("has-call");
+    callNumber.className = "call-number empty";
+    callNumber.textContent = "—";
+    callName.style.display = "none";
+    callPurpose.style.display = "none";
+  }
+
+  // 대기 정보
+  const waiting = queue.filter(q => q.status === "waiting").length;
+  const estMax  = waiting * ((settings.minutesPerTeam || 5) + (settings.bufferMinutes || 2));
+  document.getElementById("infoWaiting").textContent = waiting;
+  document.getElementById("infoEst").textContent     = estMax;
+  document.getElementById("infoTotal").textContent   = stats.total || 0;
+
+  // 대기 번호 칩
+  const chips = document.getElementById("queueChips");
+  const active = queue
+    .filter(q => q.status === "waiting" || q.status === "called")
+    .sort((a, b) => a.number - b.number)
+    .slice(0, 20);
+
+  if (active.length === 0) {
+    chips.innerHTML = `<span style="color:var(--text2);font-size:14px;">대기자 없음</span>`;
+  } else {
+    chips.innerHTML = active.map(q =>
+      `<div class="queue-chip ${q.status === "called" ? "called" : ""}">#${q.number}</div>`
+    ).join("");
+  }
+
+  // 공지
+  const noticeSection = document.getElementById("noticeSection");
+  if (notices.length > 0) {
+    noticeSection.style.display = "block";
+    noticeSection.innerHTML = notices.map(n =>
+      `<div class="notice-item"><div class="notice-dot"></div>${n}</div>`
+    ).join("");
+  } else {
+    noticeSection.style.display = "none";
+  }
+}
+
+// 초기 실행 + 30초 폴링
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>
