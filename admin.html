@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wait-Less — 관리자</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1e1e1e;
+    --surface3: #282828;
+    --border: #2a2a2a;
+    --accent: #00e5a0;
+    --accent2: #004d36;
+    --text: #f0f0f0;
+    --text2: #888;
+    --text3: #444;
+    --danger: #ff4d4d;
+    --danger2: #3a0000;
+    --warn: #ffaa44;
+    --warn2: #2a1800;
+    --blue: #4488ff;
+    --blue2: #001a3a;
+    --radius: 12px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── PIN 잠금 화면 ── */
+  #pinScreen {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+  }
+  #pinScreen::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.2; pointer-events: none; z-index: 0;
+  }
+  .pin-card {
+    position: relative; z-index: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 40px 36px;
+    width: 100%; max-width: 360px;
+    text-align: center;
+  }
+  .pin-logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px; font-weight: 700;
+    color: var(--accent); margin-bottom: 6px;
+  }
+  .pin-sub { font-size: 13px; color: var(--text2); margin-bottom: 32px; }
+  .pin-dots {
+    display: flex; justify-content: center; gap: 16px;
+    margin-bottom: 32px;
+  }
+  .pin-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--border);
+    transition: all .2s;
+  }
+  .pin-dot.filled { background: var(--accent); border-color: var(--accent); }
+  .pin-dot.error  { background: var(--danger); border-color: var(--danger); }
+  .pin-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .pin-key {
+    height: 56px; border-radius: 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-size: 20px;
+    font-family: 'Space Mono', monospace;
+    cursor: pointer; transition: all .15s;
+  }
+  .pin-key:hover { background: var(--surface3); border-color: var(--accent); }
+  .pin-key:active { transform: scale(.95); }
+  .pin-key.del { font-size: 16px; color: var(--text2); }
+  .pin-error { font-size: 13px; color: var(--danger); margin-top: 16px; min-height: 20px; }
+
+  /* ── 메인 레이아웃 ── */
+  #mainScreen { display: none; }
+
+  .top-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .top-logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px; font-weight: 700; color: var(--accent);
+  }
+  .top-badge {
+    font-size: 11px; color: var(--text2);
+    border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px 10px;
+    font-family: 'Space Mono', monospace;
+  }
+  .top-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+  /* 탭 네비 */
+  .nav-tabs {
+    display: flex; gap: 4px;
+  }
+  .nav-tab {
+    height: 34px; padding: 0 16px;
+    border-radius: 8px; border: none;
+    background: transparent; color: var(--text2);
+    font-size: 13px; cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: all .2s;
+  }
+  .nav-tab.active { background: var(--surface2); color: var(--text); }
+  .nav-tab:hover:not(.active) { color: var(--text); }
+
+  /* 일시정지 토글 */
+  .pause-btn {
+    height: 34px; padding: 0 14px;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text2);
+    font-size: 12px; cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: all .2s;
+  }
+  .pause-btn.paused {
+    border-color: var(--warn); color: var(--warn);
+    background: var(--warn2);
+  }
+  .lock-btn {
+    height: 34px; padding: 0 12px;
+    border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text3);
+    font-size: 12px; cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+
+  /* 콘텐츠 영역 */
+  .content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+  /* 패널 */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .panel-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-title {
+    font-size: 13px; font-weight: 500; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .panel-body { padding: 18px; }
+
+  /* 통계 카드 */
+  .stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px;
+  }
+  .stat-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 26px; font-weight: 700; color: var(--text);
+  }
+  .stat-lbl { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  /* 대기 목록 */
+  .queue-list { display: flex; flex-direction: column; gap: 8px; }
+  .queue-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    transition: border-color .2s;
+  }
+  .queue-row.status-called { border-color: var(--accent); background: #001a10; }
+  .queue-row.status-entered { border-color: var(--blue); opacity: .5; }
+  .queue-row.status-noshow  { border-color: var(--danger); opacity: .4; }
+
+  .q-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 15px; font-weight: 700; color: var(--text2);
+    width: 36px; flex-shrink: 0;
+  }
+  .q-info { flex: 1; min-width: 0; }
+  .q-name {
+    font-size: 14px; font-weight: 500; color: var(--text);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .q-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .q-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  .badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 500;
+  }
+  .badge-teacher { background: #2a1a00; color: var(--warn); border: 1px solid #5a3800; }
+  .badge-waiting { background: #001a10; color: var(--accent); border: 1px solid var(--accent2); }
+  .badge-called  { background: #001a10; color: var(--accent); border: 1px solid var(--accent); }
+  .badge-entered { background: var(--blue2); color: var(--blue); border: 1px solid #225599; }
+  .badge-noshow  { background: var(--danger2); color: var(--danger); border: 1px solid #6a1a1a; }
+
+  /* 액션 버튼 */
+  .btn {
+    height: 32px; padding: 0 12px;
+    border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface3); color: var(--text2);
+    font-size: 12px; cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: all .2s; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--text2); color: var(--text); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+  .btn.primary:hover { background: #00ffb3; }
+  .btn.danger  { border-color: var(--danger2); color: var(--danger); }
+  .btn.danger:hover  { background: var(--danger2); }
+  .btn.blue    { border-color: var(--blue2); color: var(--blue); }
+  .btn.blue:hover    { background: var(--blue2); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* 코드 입력 */
+  .code-input-wrap {
+    display: flex; gap: 6px;
+  }
+  .code-input {
+    width: 80px; height: 32px;
+    background: var(--surface3); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 14px; text-align: center;
+    outline: none;
+  }
+  .code-input:focus { border-color: var(--accent); }
+
+  /* 입력 */
+  input[type=text], input[type=number] {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px; padding: 0 12px;
+    height: 40px; outline: none; width: 100%;
+    transition: border-color .2s;
+  }
+  input:focus { border-color: var(--accent); }
+
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 13px; color: var(--text2); }
+  .setting-val-wrap { display: flex; align-items: center; gap: 8px; }
+  .mini-input {
+    width: 60px; height: 36px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 14px; text-align: center; outline: none;
+  }
+  .mini-input:focus { border-color: var(--accent); }
+  .unit { font-size: 12px; color: var(--text3); }
+
+  /* 목적 목록 */
+  .purpose-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .purpose-item:last-child { border-bottom: none; }
+  .purpose-name-input {
+    flex: 1; height: 36px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text);
+    font-size: 13px; padding: 0 10px; outline: none;
+  }
+  .purpose-name-input:focus { border-color: var(--accent); }
+
+  /* 공지 */
+  .notice-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .notice-item:last-child { border-bottom: none; }
+  .notice-text { flex: 1; font-size: 13px; color: var(--warn); }
+
+  /* 추가 입력 행 */
+  .add-row { display: flex; gap: 8px; margin-top: 12px; }
+  .add-input {
+    flex: 1; height: 38px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-size: 13px; padding: 0 12px; outline: none;
+  }
+  .add-input:focus { border-color: var(--accent); }
+
+  /* 그리드 레이아웃 */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* 통계 차트 */
+  .chart-bar-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .chart-bar-row { display: flex; align-items: center; gap: 10px; }
+  .chart-bar-label { font-size: 12px; color: var(--text2); width: 80px; flex-shrink: 0; text-align: right; }
+  .chart-bar-bg {
+    flex: 1; height: 20px; background: var(--surface2);
+    border-radius: 4px; overflow: hidden;
+  }
+  .chart-bar-fill {
+    height: 100%; background: var(--accent);
+    border-radius: 4px; transition: width .6s ease;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding-right: 6px;
+  }
+  .chart-bar-count { font-size: 11px; color: #000; font-weight: 700; }
+
+  /* 탭 콘텐츠 */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* 리셋 버튼 영역 */
+  .danger-zone {
+    background: var(--danger2);
+    border: 1px solid #5a1a1a;
+    border-radius: var(--radius); padding: 18px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .danger-zone-text { font-size: 13px; color: var(--danger); }
+  .danger-zone-sub { font-size: 11px; color: #884444; margin-top: 4px; }
+
+  /* 토스트 */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 20px;
+    font-size: 14px; color: var(--text);
+    opacity: 0; pointer-events: none;
+    transition: opacity .3s;
+    z-index: 9999; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+
+  /* FCM 재전송 */
+  .resend-link {
+    font-size: 11px; color: var(--blue);
+    cursor: pointer; text-decoration: underline;
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── PIN 화면 ── -->
+<div id="pinScreen">
+  <div class="pin-card">
+    <div class="pin-logo">Wait-Less</div>
+    <div class="pin-sub">관리자 PIN을 입력해주세요</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-grid">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key" onclick="pinKey('')"></button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key del" onclick="pinDel()">⌫</button>
+    </div>
+    <div class="pin-error" id="pinError"></div>
+  </div>
+</div>
+
+<!-- ── 메인 화면 ── -->
+<div id="mainScreen">
+  <div class="top-bar">
+    <div class="top-logo">Wait-Less</div>
+    <div class="top-badge">관리자</div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('queue')">대기 목록</button>
+      <button class="nav-tab" onclick="switchTab('settings')">설정</button>
+      <button class="nav-tab" onclick="switchTab('stats')">통계</button>
+    </div>
+    <div class="top-right">
+      <button class="pause-btn" id="pauseBtn" onclick="togglePause()">⏸ 일시정지</button>
+      <button class="lock-btn" onclick="lock()">🔒 잠금</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── 대기 목록 탭 ── -->
+    <div class="tab-content active" id="tab-queue">
+
+      <!-- 요약 통계 -->
+      <div class="stat-row" id="summaryRow">
+        <div class="stat-card">
+          <div class="stat-val" id="sTotal">—</div>
+          <div class="stat-lbl">전체 등록</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sWaiting">—</div>
+          <div class="stat-lbl">대기 중</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sCalled">—</div>
+          <div class="stat-lbl">호출됨</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sEntered">—</div>
+          <div class="stat-lbl">입장 완료</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sEstMax">—</div>
+          <div class="stat-lbl">최대 예상 대기</div>
+        </div>
+      </div>
+
+      <!-- 대기 목록 -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">대기 목록</div>
+          <button class="btn" onclick="loadQueue()">↻ 새로고침</button>
+        </div>
+        <div class="panel-body">
+          <div class="queue-list" id="queueList">
+            <div style="text-align:center;padding:40px;color:var(--text3);">불러오는 중...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 설정 탭 ── -->
+    <div class="tab-content" id="tab-settings">
+      <div class="two-col">
+
+        <!-- 시간 설정 -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">대기 시간 설정</div>
+          </div>
+          <div class="panel-body">
+            <div class="setting-row">
+              <div class="setting-label">팀당 기본 소요 시간</div>
+              <div class="setting-val-wrap">
+                <input class="mini-input" type="number" id="setMinutes" value="5" min="1" max="60">
+                <span class="unit">분</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">추가 버퍼 시간</div>
+              <div class="setting-val-wrap">
+                <input class="mini-input" type="number" id="setBuffer" value="2" min="0" max="30">
+                <span class="unit">분</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">노쇼 자동처리 시간</div>
+              <div class="setting-val-wrap">
+                <input class="mini-input" type="number" id="setNoshow" value="3" min="1" max="30">
+                <span class="unit">분</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">관리자 PIN</div>
+              <div class="setting-val-wrap">
+                <input class="mini-input" type="number" id="setPin" value="0000" maxlength="4">
+              </div>
+            </div>
+            <div style="margin-top:16px;">
+              <button class="btn primary" style="width:100%;" onclick="saveSettings()">설정 저장</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 체험 목적 관리 -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">체험 목적 관리</div>
+          </div>
+          <div class="panel-body">
+            <div id="purposeList"></div>
+            <div class="add-row">
+              <input class="add-input" type="text" id="newPurpose" placeholder="새 목적 입력">
+              <button class="btn primary" onclick="addPurpose()">추가</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 장비 공지 -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">장비 공지</div>
+          <span style="font-size:11px;color:var(--text3);">대기현황 페이지에 실시간 표시됩니다</span>
+        </div>
+        <div class="panel-body">
+          <div id="noticeList"></div>
+          <div class="add-row">
+            <input class="add-input" type="text" id="newNotice" placeholder="예: 프린터 2호기 점검 중">
+            <button class="btn primary" onclick="addNotice()">추가</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 위험 구역 -->
+      <div class="danger-zone">
+        <div>
+          <div class="danger-zone-text">⚠ 운영 종료 / 전체 초기화</div>
+          <div class="danger-zone-sub">대기 목록 전체가 삭제됩니다. 되돌릴 수 없어요.</div>
+        </div>
+        <button class="btn danger" onclick="resetAll()">초기화</button>
+      </div>
+
+    </div>
+
+    <!-- ── 통계 탭 ── -->
+    <div class="tab-content" id="tab-stats">
+      <div class="three-col" style="margin-bottom:16px;">
+        <div class="stat-card">
+          <div class="stat-val" id="stTotal">—</div>
+          <div class="stat-lbl">총 방문 팀</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stAvgWait">—분</div>
+          <div class="stat-lbl">평균 대기 시간</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stNoshowRate">—%</div>
+          <div class="stat-lbl">노쇼율</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <!-- 목적별 -->
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">체험 목적별 방문</div></div>
+          <div class="panel-body">
+            <div class="chart-bar-wrap" id="purposeChart"></div>
+          </div>
+        </div>
+
+        <!-- 시간대별 -->
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">시간대별 방문</div></div>
+          <div class="panel-body">
+            <div class="chart-bar-wrap" id="hourChart"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:8px; text-align:right;">
+        <button class="btn" onclick="loadStats()">↻ 통계 갱신</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = "https://script.google.com/macros/s/AKfycbyd6vEm8tZfb5M5qBA6nj3SmIWl-MN9RavziBMO9KHNf-PzzDlWSK738O8wI3IzLCtc/exec";
+
+let pinInput    = "";
+let correctPin  = "0000";
+let isPaused    = false;
+let queueData   = [];
+let settings    = {};
+let pollingTimer = null;
+
+// ── PIN ──
+async function initPin() {
+  try {
+    const res  = await fetch(`${API}?action=getSettings`);
+    const data = await res.json();
+    correctPin = String(data.adminPin || "0000");
+    isPaused   = data.paused || false;
+    settings   = data;
+  } catch {}
+}
+
+function pinKey(k) {
+  if (!k || pinInput.length >= 4) return;
+  pinInput += k;
+  updatePinDots();
+  if (pinInput.length === 4) setTimeout(checkPin, 150);
+}
+
+function pinDel() {
+  pinInput = pinInput.slice(0, -1);
+  updatePinDots();
+}
+
+function updatePinDots(error = false) {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById(`pd${i}`);
+    dot.className = "pin-dot" +
+      (error ? " error" : i < pinInput.length ? " filled" : "");
+  }
+}
+
+async function checkPin() {
+  if (pinInput === correctPin) {
+    document.getElementById("pinScreen").style.display  = "none";
+    document.getElementById("mainScreen").style.display = "block";
+    onEnterAdmin();
+  } else {
+    updatePinDots(true);
+    document.getElementById("pinError").textContent = "PIN이 올바르지 않습니다";
+    setTimeout(() => {
+      pinInput = "";
+      updatePinDots();
+      document.getElementById("pinError").textContent = "";
+    }, 1000);
+  }
+}
+
+function lock() {
+  pinInput = "";
+  updatePinDots();
+  document.getElementById("mainScreen").style.display = "none";
+  document.getElementById("pinScreen").style.display  = "flex";
+  clearInterval(pollingTimer);
+}
+
+// ── 진입 ──
+function onEnterAdmin() {
+  loadQueue();
+  loadSettings();
+  loadPurposes();
+  loadNotices();
+  updatePauseBtn();
+  pollingTimer = setInterval(loadQueue, 30000);
+}
+
+// ── 탭 전환 ──
+function switchTab(name) {
+  document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".nav-tab").forEach(el => el.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  document.querySelectorAll(".nav-tab").forEach(el => {
+    if (el.textContent.includes(
+      name === "queue" ? "대기" : name === "settings" ? "설정" : "통계"
+    )) el.classList.add("active");
+  });
+  if (name === "stats") loadStats();
+}
+
+// ── 대기 목록 ──
+async function loadQueue() {
+  try {
+    const res  = await fetch(`${API}?action=getQueue`);
+    const data = await res.json();
+    queueData  = data.queue || [];
+    renderQueue();
+    renderSummary();
+  } catch {}
+}
+
+function renderQueue() {
+  const list = document.getElementById("queueList");
+  if (!queueData.length) {
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);">대기자가 없습니다</div>`;
+    return;
+  }
+
+  list.innerHTML = "";
+  // 상태 순서: called → waiting → entered → noshow
+  const order = { called: 0, waiting: 1, entered: 2, noshow: 3 };
+  const sorted = [...queueData].sort((a, b) => {
+    if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+    return a.number - b.number;
+  });
+
+  sorted.forEach(q => {
+    const row = document.createElement("div");
+    row.className = `queue-row status-${q.status}`;
+
+    const memberCount = 1 + (q.members?.length || 0);
+    const badgeClass  = `badge badge-${q.status}`;
+    const statusLabel = { waiting: "대기", called: "호출됨", entered: "입장", noshow: "노쇼" };
+    const teacherBadge = q.type === "teacher"
+      ? `<span class="badge badge-teacher">선생님</span>` : "";
+
+    let actions = "";
+    if (q.status === "waiting") {
+      actions = `<button class="btn primary" onclick="callGroup('${q.id}')">호출</button>`;
+    } else if (q.status === "called") {
+      actions = `
+        <div class="code-input-wrap">
+          <input class="code-input" type="text" id="code-${q.id}" maxlength="4" placeholder="코드">
+          <button class="btn blue" onclick="confirmEntry('${q.id}')">입장↗</button>
+          <button class="btn danger" onclick="markNoshow('${q.id}')">노쇼</button>
+        </div>
+        <span class="resend-link" onclick="resendFcm('${q.id}')">알림 재전송</span>
+      `;
+    }
+
+    row.innerHTML = `
+      <div class="q-num">#${q.number}</div>
+      <div class="q-info">
+        <div class="q-name">
+          ${q.name}
+          ${teacherBadge}
+          <span class="${badgeClass}">${statusLabel[q.status] || q.status}</span>
+          ${q.status === "called" ? `<span style="font-family:'Space Mono',monospace;font-size:13px;color:var(--accent);margin-left:4px;">${q.code}</span>` : ""}
+        </div>
+        <div class="q-sub">${q.purpose} · ${memberCount}명 · ${q.sub || ""}</div>
+      </div>
+      <div class="q-actions">${actions}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function renderSummary() {
+  const total   = queueData.length;
+  const waiting = queueData.filter(q => q.status === "waiting").length;
+  const called  = queueData.filter(q => q.status === "called").length;
+  const entered = queueData.filter(q => q.status === "entered").length;
+  const estMax  = waiting * ((settings.minutesPerTeam || 5) + (settings.bufferMinutes || 2));
+
+  document.getElementById("sTotal").textContent   = total;
+  document.getElementById("sWaiting").textContent = waiting;
+  document.getElementById("sCalled").textContent  = called;
+  document.getElementById("sEntered").textContent = entered;
+  document.getElementById("sEstMax").textContent  = estMax + "분";
+}
+
+// ── 호출 ──
+async function callGroup(id) {
+  try {
+    const res  = await fetch(API, { method: "POST", body: JSON.stringify({ action: "call", id }) });
+    const data = await res.json();
+    if (data.ok) { toast("✅ 호출 완료 — 코드: " + data.code); loadQueue(); }
+    else toast("오류: " + data.error, true);
+  } catch { toast("네트워크 오류", true); }
+}
+
+// ── 입장 확인 ──
+async function confirmEntry(id) {
+  const code = document.getElementById(`code-${id}`)?.value.trim() || "";
+  try {
+    const res  = await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({ action: "confirm", id, code }),
+    });
+    const data = await res.json();
+    if (data.ok) { toast("✅ 입장 완료"); loadQueue(); }
+    else if (data.error === "Wrong code") toast("❌ 코드가 틀렸습니다", true);
+    else toast("오류: " + data.error, true);
+  } catch { toast("네트워크 오류", true); }
+}
+
+// ── 노쇼 ──
+async function markNoshow(id) {
+  if (!confirm("노쇼 처리하시겠습니까?")) return;
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify({ action: "noshow", id }) });
+    toast("노쇼 처리됨"); loadQueue();
+  } catch { toast("네트워크 오류", true); }
+}
+
+// ── FCM 재전송 ──
+async function resendFcm(id) {
+  try {
+    const res  = await fetch(API, { method: "POST", body: JSON.stringify({ action: "resendFcm", id }) });
+    const data = await res.json();
+    toast(data.ok ? "📲 알림 재전송 완료" : "재전송 실패: " + data.error, !data.ok);
+  } catch { toast("네트워크 오류", true); }
+}
+
+// ── 일시정지 ──
+async function togglePause() {
+  isPaused = !isPaused;
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify({ action: "setPause", paused: isPaused }) });
+    updatePauseBtn();
+    toast(isPaused ? "⏸ 운영 일시정지" : "▶ 운영 재개");
+  } catch { toast("네트워크 오류", true); }
+}
+
+function updatePauseBtn() {
+  const btn = document.getElementById("pauseBtn");
+  btn.textContent = isPaused ? "▶ 재개" : "⏸ 일시정지";
+  btn.classList.toggle("paused", isPaused);
+}
+
+// ── 설정 ──
+async function loadSettings() {
+  try {
+    const res  = await fetch(`${API}?action=getSettings`);
+    const data = await res.json();
+    settings   = data;
+    document.getElementById("setMinutes").value = data.minutesPerTeam || 5;
+    document.getElementById("setBuffer").value  = data.bufferMinutes  || 2;
+    document.getElementById("setNoshow").value  = data.noshowMinutes  || 3;
+    document.getElementById("setPin").value      = data.adminPin       || "0000";
+    isPaused = data.paused || false;
+    updatePauseBtn();
+  } catch {}
+}
+
+async function saveSettings() {
+  const body = {
+    action:        "saveSettings",
+    minutesPerTeam: Number(document.getElementById("setMinutes").value),
+    bufferMinutes:  Number(document.getElementById("setBuffer").value),
+    noshowMinutes:  Number(document.getElementById("setNoshow").value),
+    adminPin:       document.getElementById("setPin").value,
+    paused:         isPaused,
+  };
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify(body) });
+    settings   = body;
+    correctPin = body.adminPin;
+    toast("✅ 설정 저장 완료");
+  } catch { toast("네트워크 오류", true); }
+}
+
+// ── 체험 목적 ──
+let purposes = [];
+
+async function loadPurposes() {
+  try {
+    const res  = await fetch(`${API}?action=getPurposes`);
+    const data = await res.json();
+    purposes   = data.purposes || [];
+    renderPurposes();
+  } catch {}
+}
+
+function renderPurposes() {
+  const list = document.getElementById("purposeList");
+  list.innerHTML = "";
+  purposes.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "purpose-item";
+    row.innerHTML = `
+      <input class="purpose-name-input" type="text" value="${p}" id="pur-${i}"
+        onchange="updatePurpose(${i})">
+      <button class="btn danger" onclick="removePurpose(${i})">삭제</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+async function addPurpose() {
+  const name = document.getElementById("newPurpose").value.trim();
+  if (!name) return;
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify({ action: "addPurpose", name }) });
+    document.getElementById("newPurpose").value = "";
+    toast("추가됨"); loadPurposes();
+  } catch { toast("네트워크 오류", true); }
+}
+
+async function updatePurpose(index) {
+  const name = document.getElementById(`pur-${index}`)?.value.trim();
+  if (!name) return;
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify({ action: "updatePurpose", index, name }) });
+    toast("수정됨");
+  } catch { toast("네트워크 오류", true); }
+}
+
+async function removePurpose(index) {
+  if (!confirm("삭제하시겠습니까?")) return;
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify({ action: "removePurpose", index }) });
+    toast("삭제됨"); loadPurposes();
+  } catch { toast("네트워크 오류", true); }
+}
+
+// ── 공지 ──
+let notices = [];
+
+async function loadNotices() {
+  try {
+    const res  = await fetch(`${API}?action=getNotices`);
+    const data = await res.json();
+    notices    = data.notices || [];
+    renderNotices();
+  } catch {}
+}
+
+function renderNotices() {
+  const list = document.getElementById("noticeList");
+  list.innerHTML = "";
+  if (!notices.length) {
+    list.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:8px 0;">공지 없음</div>`;
+    return;
+  }
+  notices.forEach((n, i) => {
+    const row = document.createElement("div");
+    row.className = "notice-item";
+    row.innerHTML = `
+      <span class="notice-text">⚠ ${n}</span>
+      <button class="btn danger" onclick="removeNotice(${i})">삭제</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+async function addNotice() {
+  const text = document.getElementById("newNotice").value.trim();
+  if (!text) return;
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify({ action: "addNotice", text }) });
+    document.getElementById("newNotice").value = "";
+    toast("공지 추가됨"); loadNotices();
+  } catch { toast("네트워크 오류", true); }
+}
+
+async function removeNotice(index) {
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify({ action: "removeNotice", index }) });
+    toast("공지 삭제됨"); loadNotices();
+  } catch { toast("네트워크 오류", true); }
+}
+
+// ── 초기화 ──
+async function resetAll() {
+  if (!confirm("정말 초기화하시겠습니까?\n대기 목록 전체가 삭제됩니다.")) return;
+  if (!confirm("한 번 더 확인합니다. 되돌릴 수 없습니다.")) return;
+  try {
+    await fetch(API, { method: "POST", body: JSON.stringify({ action: "reset" }) });
+    toast("✅ 초기화 완료"); loadQueue();
+  } catch { toast("네트워크 오류", true); }
+}
+
+// ── 통계 ──
+async function loadStats() {
+  try {
+    const res  = await fetch(`${API}?action=getStats`);
+    const data = await res.json();
+    renderStats(data);
+  } catch {}
+}
+
+function renderStats(data) {
+  document.getElementById("stTotal").textContent    = data.total || 0;
+  document.getElementById("stAvgWait").textContent  = (data.avgWait || 0) + "분";
+  const noshowRate = data.total
+    ? Math.round((data.noshow / data.total) * 100) : 0;
+  document.getElementById("stNoshowRate").textContent = noshowRate + "%";
+
+  // 목적별 차트
+  const purposeChart = document.getElementById("purposeChart");
+  purposeChart.innerHTML = "";
+  const purposeMap = data.purposeMap || {};
+  const maxP = Math.max(...Object.values(purposeMap), 1);
+  Object.entries(purposeMap).forEach(([label, count]) => {
+    const pct = Math.round((count / maxP) * 100);
+    purposeChart.innerHTML += `
+      <div class="chart-bar-row">
+        <div class="chart-bar-label">${label}</div>
+        <div class="chart-bar-bg">
+          <div class="chart-bar-fill" style="width:${pct}%">
+            <span class="chart-bar-count">${count}</span>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  // 시간대별 차트
+  const hourChart = document.getElementById("hourChart");
+  hourChart.innerHTML = "";
+  const hourMap = data.hourMap || {};
+  const maxH = Math.max(...Object.values(hourMap), 1);
+  Object.entries(hourMap)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .forEach(([hour, count]) => {
+      const pct = Math.round((count / maxH) * 100);
+      hourChart.innerHTML += `
+        <div class="chart-bar-row">
+          <div class="chart-bar-label">${hour}시</div>
+          <div class="chart-bar-bg">
+            <div class="chart-bar-fill" style="width:${pct}%">
+              <span class="chart-bar-count">${count}</span>
+            </div>
+          </div>
+        </div>`;
+    });
+}
+
+// ── 토스트 ──
+let toastTimer = null;
+function toast(msg, isError = false) {
+  const el = document.getElementById("toast");
+  el.textContent   = msg;
+  el.style.color   = isError ? "var(--danger)" : "var(--text)";
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+// ── 초기 실행 ──
+initPin();
+</script>
+</body>
+</html>
