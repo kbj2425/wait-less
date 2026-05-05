@@ -1,0 +1,15 @@
+# 서비스 계정 키 - 절대 올리지 마세요!
+*.json
+!package.json
+
+# 환경 설정
+.env
+.env.local
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+# 에디터
+.vscode/
+.idea/
